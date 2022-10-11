@@ -1,0 +1,62 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: AWS Serverless Quarkus - S3 Ingest Function
+Globals:
+  Api:
+    EndpointConfiguration: REGIONAL
+    BinaryMediaTypes:
+      - "*/*"
+Parameters:
+  NetworkStackName:
+    Type: String
+    Default: "network-stack"
+
+Resources:
+  IngestBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: "Retain"
+
+  FunctionSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "Security Group for Function"
+      VpcId:
+        Fn::ImportValue:
+          !Sub "${NetworkStackName}-VPC"
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-FunctionSecurityGroup'
+          
+  S3IngestFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: io.quarkus.amazon.lambda.runtime.QuarkusStreamHandler::handleRequest
+      Runtime: java11
+      CodeUri: target/function.zip
+      MemorySize: 512
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - AmazonS3ReadOnlyAccess
+      Timeout: 15
+      Events:
+        S3Event:
+          Type: S3
+          Properties:
+            Bucket: !Ref IngestBucket
+            Events:
+              - 's3:ObjectCreated:*'
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref FunctionSecurityGroup
+        SubnetIds:
+          - Fn::ImportValue:
+              !Sub "${NetworkStackName}-PrivateSubnet0"
+          - Fn::ImportValue:
+              !Sub "${NetworkStackName}-PrivateSubnet1"
+          - Fn::ImportValue:
+              !Sub "${NetworkStackName}-PrivateSubnet2"
+
+Outputs:
+  IngestBucketName:
+    Description: S3  ingest bucket
+    Value: !Ref IngestBucket
