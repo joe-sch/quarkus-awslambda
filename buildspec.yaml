@@ -1,0 +1,29 @@
+version: 0.2
+
+env:
+  variables:
+    QUARKUS_PROFILE: "prod"
+    MVN_XOPTS: "-B -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn"
+
+phases:
+  install:
+    commands:
+      - echo Install SDK and tools
+      - curl -s "https://get.sdkman.io" | bash
+      - source "/root/.sdkman/bin/sdkman-init.sh" && sdk install java 11.0.16-amzn && sdk install maven
+      - npm install -g aws-cdk
+      - sam --version
+  build:
+    commands:
+      - echo Build the packages
+      - mvn -f piggybank package -DskipTests
+      - mvn -f piggybank-s3 package -DskipTests
+  post_build:
+    commands:
+      - cd piggybank && sam deploy
+      - cd piggybank-s3 && sam deploy
+
+cache:
+  paths:
+    - '/root/.m2/**/*'
+    - '/root/.sdkman/**/*'
